@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Brain, Award, TrendingUp, RotateCcw, Home, Share } from "lucide-react"
+import { Brain, Award, TrendingUp, RotateCcw, Home, Share, Download } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { getSupabaseClient } from "@/lib/supabase"
+import { exportInterviewReport } from "@/lib/export-utils"
 
 interface InterviewResult {
   id: string
@@ -147,6 +148,18 @@ export default function ResultsPage() {
     if (score >= 8) return "text-green-600"
     if (score >= 6) return "text-yellow-600"
     return "text-red-600"
+  }
+
+  const handleExportReport = () => {
+    if (!interview) return
+
+    const reportData = {
+      interview,
+      responses,
+      boardMembers,
+    }
+
+    exportInterviewReport(reportData, "pdf")
   }
 
   if (loading) {
@@ -379,6 +392,10 @@ export default function ResultsPage() {
               Practice Again
             </Button>
           </Link>
+          <Button variant="outline" size="lg" className="w-full sm:w-auto" onClick={handleExportReport}>
+            <Download className="h-4 w-4 mr-2" />
+            Export Report
+          </Button>
           <Button variant="outline" size="lg" className="w-full sm:w-auto">
             <Share className="h-4 w-4 mr-2" />
             Share Results

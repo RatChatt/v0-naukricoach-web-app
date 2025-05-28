@@ -1,0 +1,200 @@
+import jsPDF from "jspdf"
+
+interface InterviewReport {
+  interview: {
+    id: string
+    job_title: string
+    company: string
+    round_type: string
+    average_score: number
+    performance_band: string
+    completed_at: string
+  }
+  responses: Array<{
+    user_answer: string
+    ai_score: number
+    ai_feedback: string
+    time_taken: number
+    questions: {
+      text: string
+      question_type: string
+    }
+  }>
+  boardMembers?: Array<{
+    name: string
+    role: string
+    expertise: string
+  }>
+}
+
+export async function exportInterviewReport(data: InterviewReport, format: "pdf" | "json" = "pdf") {
+  if (format === "json") {
+    return exportAsJSON(data)
+  } else {
+    return exportAsPDF(data)
+  }
+}
+
+function exportAsJSON(data: InterviewReport) {
+  const jsonString = JSON.stringify(data, null, 2)
+  const blob = new Blob([jsonString], { type: "application/json" })
+  const url = URL.createObjectURL(blob)
+
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `interview-report-${data.interview.id}.json`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function exportAsPDF(data: InterviewReport) {
+  const pdf = new jsPDF()
+  let yPosition = 20
+
+  // Header
+  pdf.setFontSize(20)
+  pdf.setFont("helvetica", "bold")
+  pdf.text("UPSC Interview Report", 20, yPosition)
+  yPosition += 15
+
+  // Interview Details
+  pdf.setFontSize(12)
+  pdf.setFont("helvetica", "normal")
+  pdf.text(`Interview ID: ${data.interview.id}`, 20, yPosition)
+  yPosition += 8
+  pdf.text(`Position: ${data.interview.job_title}`, 20, yPosition)
+  yPosition += 8
+  pdf.text(`Organization: ${data.interview.company}`, 20, yPosition)
+  yPosition += 8
+  pdf.text(`Round Type: ${data.interview.round_type}`, 20, yPosition)
+  yPosition += 8
+  pdf.text(`Date: ${new Date(data.interview.completed_at).toLocaleDateString()}`, 20, yPosition)
+  yPosition += 15
+
+  // Performance Summary
+  pdf.setFontSize(16)
+  pdf.setFont("helvetica", "bold")
+  pdf.text("Performance Summary", 20, yPosition)
+  yPosition += 10
+
+  pdf.setFontSize(12)
+  pdf.setFont("helvetica", "normal")
+  pdf.text(`Overall Score: ${data.interview.average_score.toFixed(1)}/10`, 20, yPosition)
+  yPosition += 8
+  pdf.text(`Performance Band: ${data.interview.performance_band}`, 20, yPosition)
+  yPosition += 8
+  pdf.text(`Questions Answered: ${data.responses.length}`, 20, yPosition)
+  yPosition += 15
+
+  // Board Members (if available)
+  if (data.boardMembers && data.boardMembers.length > 0) {
+    pdf.setFontSize(16)
+    pdf.setFont("helvetica", "bold")
+    pdf.text("Interview Board", 20, yPosition)
+    yPosition += 10
+
+    pdf.setFontSize(10)
+    pdf.setFont("helvetica", "normal")
+    data.boardMembers.forEach((member, index) => {
+      pdf.text(`${index + 1}. ${member.name} - ${member.role} (${member.expertise})`, 20, yPosition)
+      yPosition += 6
+    })
+    yPosition += 10
+  }
+
+  // Question-wise Analysis
+  pdf.setFontSize(16)
+  pdf.setFont("helvetica", "bold")
+  pdf.text("Question-wise Analysis", 20, yPosition)
+  yPosition += 10
+
+  data.responses.forEach((response, index) => {
+    // Check if we need a new page
+    if (yPosition > 250) {
+      pdf.addPage()
+      yPosition = 20
+    }
+
+    pdf.setFontSize(12)
+    pdf.setFont("helvetica", "bold")
+    pdf.text(`Question ${index + 1}:`, 20, yPosition)
+    yPosition += 8
+
+    pdf.setFontSize(10)
+    pdf.setFont("helvetica", "normal")
+
+    // Question text (with text wrapping)
+    const questionLines = pdf.splitTextToSize(response.questions.text, 170)
+    pdf.text(questionLines, 20, yPosition)
+    yPosition += questionLines.length * 5 + 5
+
+    // Score and type
+    pdf.text(
+      `Score: ${response.ai_score.toFixed(1)}/10 | Type: ${response.questions.question_type} | Time: ${Math.floor(response.time_taken / 60)}:${(response.time_taken % 60).toString().padStart(2, "0")}`,
+      20,
+      yPosition,
+    )
+    yPosition += 8
+
+    // Answer (truncated if too long)
+    pdf.setFont("helvetica", "italic")
+    const answerText =
+      response.user_answer.length > 200 ? response.user_answer.substring(0, 200) + "..." : response.user_answer
+    const answerLines = pdf.splitTextToSize(`Answer: ${answerText}`, 170)
+    pdf.text(answerLines, 20, yPosition)
+    yPosition += answerLines.length * 5 + 5
+
+    // Feedback (truncated if too long)
+    pdf.setFont("helvetica", "normal")
+    const feedbackText =
+      response.ai_feedback.length > 150 ? response.ai_feedback.substring(0, 150) + "..." : response.ai_feedback
+    const feedbackLines = pdf.splitTextToSize(`Feedback: ${feedbackText}`, 170)
+    pdf.text(feedbackLines, 20, yPosition)
+    yPosition += feedbackLines.length * 5 + 10
+  })
+
+  // Footer
+  const pageCount = pdf.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    pdf.setPage(i)
+    pdf.setFontSize(8)
+    pdf.setFont("helvetica", "normal")
+    pdf.text(`Generated by UPSC Interview Coach - Page ${i} of ${pageCount}`, 20, 285)
+  }
+
+  // Save the PDF
+  pdf.save(`interview-report-${data.interview.id}.pdf`)
+}
+
+export function exportAnalyticsReport(analyticsData: any) {
+  const csv = convertToCSV(analyticsData)
+  const blob = new Blob([csv], { type: "text/csv" })
+  const url = URL.createObjectURL(blob)
+
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `analytics-report-${new Date().toISOString().split("T")[0]}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function convertToCSV(data: any): string {
+  const headers = ["Date", "Score", "Category", "Question Type", "Time Taken", "Performance Band"]
+  const rows =
+    data.responses?.map((response: any) => [
+      new Date(response.created_at).toLocaleDateString(),
+      response.ai_score,
+      response.questions?.category || "N/A",
+      response.questions?.question_type || "N/A",
+      response.time_taken,
+      data.interview?.performance_band || "N/A",
+    ]) || []
+
+  const csvContent = [headers.join(","), ...rows.map((row: any[]) => row.join(","))].join("\n")
+
+  return csvContent
+}
