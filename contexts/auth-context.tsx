@@ -12,7 +12,9 @@ interface AuthContextType {
   isDemo: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, name: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -113,6 +115,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
+  const signInWithGoogle = async () => {
+    if (isDemo) {
+      // Demo mode - simulate successful Google login
+      setUser({
+        ...mockUser,
+        email: "demo.google@naukricoach.com",
+        user_metadata: {
+          name: "Demo Google User",
+          avatar_url: "https://via.placeholder.com/40",
+          provider: "google",
+        },
+      })
+      return
+    }
+
+    const supabase = getSupabaseClient()
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    })
+    if (error) throw error
+  }
+
+  const resetPassword = async (email: string) => {
+    if (isDemo) {
+      // Demo mode - simulate password reset
+      return
+    }
+
+    const supabase = getSupabaseClient()
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    if (error) throw error
+  }
+
   const signOut = async () => {
     if (isDemo) {
       setUser(null)
@@ -125,7 +169,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, isDemo, signIn, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
+        isDemo,
+        signIn,
+        signUp,
+        signInWithGoogle,
+        signOut,
+        resetPassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

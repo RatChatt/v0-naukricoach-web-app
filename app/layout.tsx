@@ -10,7 +10,13 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "UPSC Interview Coach - AI-Powered Personality Test Preparation",
   description:
-    "Master your UPSC Civil Services Personality Test with AI-powered mock interviews, adaptive questioning, and comprehensive feedback",
+    "Master your UPSC Civil Services Personality Test with AI-powered mock interviews, adaptive questioning, and comprehensive feedback. Sign in with Google for instant access.",
+  keywords: "UPSC, interview, preparation, AI, civil services, personality test, mock interview",
+  openGraph: {
+    title: "UPSC Interview Coach - AI-Powered Interview Preparation",
+    description: "Master your UPSC interview with AI-powered mock sessions and personalized feedback",
+    type: "website",
+  },
     generator: 'v0.dev'
 }
 
