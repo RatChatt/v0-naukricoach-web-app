@@ -3,18 +3,20 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
-import { getSupabaseClient, isDemo } from "@/lib/supabase"
+import { getSupabaseClient, isDemo, isSupabaseConfigured } from "@/lib/supabase"
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   error: string | null
   isDemo: boolean
+  isConfigured: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, name: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
+  isGoogleAuthEnabled: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -36,17 +38,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isGoogleAuthEnabled, setIsGoogleAuthEnabled] = useState(false)
+  const isConfigured = isSupabaseConfigured()
 
   useEffect(() => {
     if (isDemo) {
-      // In demo mode, simulate authentication
+      // In demo mode, simulate authentication and enable Google auth
       setUser(mockUser)
+      setIsGoogleAuthEnabled(true)
       setLoading(false)
+      return
+    }
+
+    if (!isConfigured) {
+      setLoading(false)
+      setError("Supabase is not properly configured")
       return
     }
 
     try {
       const supabase = getSupabaseClient()
+
+      // Check if Google auth is enabled
+      setIsGoogleAuthEnabled(true) // Assume enabled if Supabase is configured
 
       // Get initial session
       supabase.auth
@@ -74,13 +88,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(err.message)
       setLoading(false)
     }
-  }, [])
+  }, [isConfigured])
 
   const signIn = async (email: string, password: string) => {
     if (isDemo) {
       // Demo mode - simulate successful login
       setUser(mockUser)
       return
+    }
+
+    if (!isConfigured) {
+      throw new Error("Authentication is not configured. Please contact support.")
     }
 
     const supabase = getSupabaseClient()
@@ -102,6 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    if (!isConfigured) {
+      throw new Error("Authentication is not configured. Please contact support.")
+    }
+
     const supabase = getSupabaseClient()
     const { error } = await supabase.auth.signUp({
       email,
@@ -110,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           name,
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
     if (error) throw error
@@ -130,6 +153,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    if (!isConfigured) {
+      throw new Error("Authentication is not configured. Please contact support.")
+    }
+
+    if (!isGoogleAuthEnabled) {
+      throw new Error("Google authentication is not configured. Please use email/password login or contact support.")
+    }
+
     const supabase = getSupabaseClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -141,13 +172,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       },
     })
-    if (error) throw error
+
+    if (error) {
+      if (error.message.includes("provider is not enabled")) {
+        throw new Error("Google authentication is not configured. Please use email/password login or contact support.")
+      }
+      throw error
+    }
   }
 
   const resetPassword = async (email: string) => {
     if (isDemo) {
       // Demo mode - simulate password reset
       return
+    }
+
+    if (!isConfigured) {
+      throw new Error("Authentication is not configured. Please contact support.")
     }
 
     const supabase = getSupabaseClient()
@@ -163,6 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    if (!isConfigured) {
+      return
+    }
+
     const supabase = getSupabaseClient()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
@@ -175,11 +220,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         error,
         isDemo,
+        isConfigured,
         signIn,
         signUp,
         signInWithGoogle,
         signOut,
         resetPassword,
+        isGoogleAuthEnabled,
       }}
     >
       {children}

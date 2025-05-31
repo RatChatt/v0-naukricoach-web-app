@@ -5,7 +5,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Brain, Plus, TrendingUp, Clock, BookOpen, LogOut, User, BarChart3, AlertCircle } from "lucide-react"
+import {
+  Brain,
+  Plus,
+  TrendingUp,
+  Clock,
+  BookOpen,
+  LogOut,
+  User,
+  BarChart3,
+  AlertCircle,
+  CheckCircle,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -23,7 +34,7 @@ interface Interview {
 }
 
 export default function DashboardPage() {
-  const { user, signOut, loading, isDemo: demoMode } = useAuth()
+  const { user, signOut, loading, isDemo, isConfigured } = useAuth()
   const router = useRouter()
   const [interviews, setInterviews] = useState<Interview[]>([])
   const [stats, setStats] = useState({
@@ -40,7 +51,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) {
-      if (demoMode) {
+      if (isDemo || !isConfigured) {
         // Load demo data
         const demoInterviews = [
           {
@@ -74,7 +85,7 @@ export default function DashboardPage() {
         fetchUserData()
       }
     }
-  }, [user, demoMode])
+  }, [user, isDemo, isConfigured])
 
   const fetchUserData = async () => {
     try {
@@ -137,6 +148,43 @@ export default function DashboardPage() {
     }
   }
 
+  const getStatusBadge = () => {
+    if (isConfigured && !isDemo) {
+      return (
+        <Badge variant="outline" className="ml-2 text-green-600 border-green-200">
+          <CheckCircle className="h-3 w-3 mr-1" />
+          Live Mode
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="outline" className="ml-2 text-orange-600 border-orange-200">
+        <AlertCircle className="h-3 w-3 mr-1" />
+        Demo Mode
+      </Badge>
+    )
+  }
+
+  const getStatusMessage = () => {
+    if (isConfigured && !isDemo) {
+      return null
+    }
+    return (
+      <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+        <div className="flex items-center">
+          <AlertCircle className="h-5 w-5 text-orange-600 mr-2" />
+          <div>
+            <h4 className="font-medium text-orange-800">Demo Mode Active</h4>
+            <p className="text-sm text-orange-700">
+              You're viewing demo data. To use full functionality with real data persistence, please configure your
+              Supabase integration.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -146,11 +194,7 @@ export default function DashboardPage() {
             <div className="flex items-center">
               <Brain className="h-8 w-8 text-blue-600 mr-2" />
               <span className="text-2xl font-bold text-gray-900">UPSC Interview Coach</span>
-              {demoMode && (
-                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-200">
-                  Demo Mode
-                </Badge>
-              )}
+              {getStatusBadge()}
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Welcome, {user.user_metadata?.name || user.email}</span>
@@ -164,20 +208,8 @@ export default function DashboardPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Demo Mode Notice */}
-        {demoMode && (
-          <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-            <div className="flex items-center">
-              <AlertCircle className="h-5 w-5 text-orange-600 mr-2" />
-              <div>
-                <h4 className="font-medium text-orange-800">Demo Mode Active</h4>
-                <p className="text-sm text-orange-700">
-                  You're viewing demo data. To use full functionality, please configure your Supabase integration.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Status Message */}
+        {getStatusMessage()}
 
         {/* Welcome Section */}
         <div className="mb-8">

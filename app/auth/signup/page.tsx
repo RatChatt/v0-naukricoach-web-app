@@ -1,36 +1,37 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Brain, AlertCircle, CheckCircle } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { Separator } from "@/components/ui/separator"
 import { GoogleAuthButton } from "@/components/google-auth-button"
+import { useAuth } from "@/hooks/use-auth"
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 
-export default function SignUpPage() {
+export default function SignupPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState("")
-  const [success, setSuccess] = useState(false)
-  const { signUp, signInWithGoogle } = useAuth()
+  const [success, setSuccess] = useState("")
   const router = useRouter()
+  const { signUp, signInWithGoogle, isGoogleAuthEnabled } = useAuth()
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
+    setSuccess("")
 
-    // Validation
     if (password !== confirmPassword) {
       setError("Passwords do not match")
       setLoading(false)
@@ -45,10 +46,9 @@ export default function SignUpPage() {
 
     try {
       await signUp(email, password, name)
-      setSuccess(true)
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 2000)
+      setSuccess("Account created successfully! Please check your email to verify your account.")
+      // Don't redirect immediately - let user see the success message
+      setTimeout(() => router.push("/auth/login"), 3000)
     } catch (err: any) {
       setError(err.message || "Failed to create account")
     } finally {
@@ -57,141 +57,131 @@ export default function SignUpPage() {
   }
 
   const handleGoogleSignUp = async () => {
+    setGoogleLoading(true)
+    setError("")
+
     try {
-      setLoading(true)
-      setError("")
       await signInWithGoogle()
-      // Google auth will redirect automatically via callback
+      // Redirect will be handled by the OAuth flow
     } catch (err: any) {
       setError(err.message || "Failed to sign up with Google")
-      setLoading(false)
+      setGoogleLoading(false)
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="text-center py-8">
-            <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Account Created!</h2>
-            <p className="text-gray-600 mb-4">Welcome to UPSC Interview Coach! Redirecting to your dashboard...</p>
-            <div className="text-sm text-gray-500">
-              If you signed up with email, please check your inbox for a verification link.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex items-center justify-center mb-4">
-            <Brain className="h-8 w-8 text-blue-600 mr-2" />
-            <span className="text-2xl font-bold">UPSC Interview Coach</span>
-          </div>
-          <CardTitle>Create Account</CardTitle>
-          <CardDescription>Start your UPSC interview preparation journey</CardDescription>
+          <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
+          <CardDescription>Join UPSC Interview Coach and start your preparation</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Google Sign Up */}
-          <GoogleAuthButton onClick={handleGoogleSignUp} loading={loading} text="Sign up with Google" />
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or create account with email</span>
-            </div>
-          </div>
+          {success && (
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Google Sign Up */}
+          {isGoogleAuthEnabled && (
+            <>
+              <GoogleAuthButton
+                onClick={handleGoogleSignUp}
+                loading={googleLoading}
+                text="Sign up with Google"
+                disabled={loading}
+              />
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator className="w-full" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-muted-foreground">Or continue with email</span>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Email/Password Form */}
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="name">Full Name</Label>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
               <Input
-                id="name"
                 type="text"
+                placeholder="Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                placeholder="Enter your full name"
-                disabled={loading}
+                disabled={loading || googleLoading}
               />
             </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-2">
               <Input
-                id="email"
                 type="email"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="Enter your email"
-                disabled={loading}
+                disabled={loading || googleLoading}
               />
             </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-2">
               <Input
-                id="password"
                 type="password"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="Create a password (min. 6 characters)"
-                minLength={6}
-                disabled={loading}
+                disabled={loading || googleLoading}
               />
             </div>
-            <div>
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <div className="space-y-2">
               <Input
-                id="confirmPassword"
                 type="password"
+                placeholder="Confirm Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                placeholder="Confirm your password"
-                disabled={loading}
+                disabled={loading || googleLoading}
               />
             </div>
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Create Account"}
+            <Button type="submit" className="w-full" disabled={loading || googleLoading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                "Create Account"
+              )}
             </Button>
           </form>
 
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600">
               Already have an account?{" "}
-              <Link href="/auth/login" className="text-blue-600 hover:underline font-medium">
+              <Link href="/auth/login" className="text-blue-600 hover:underline">
                 Sign in
               </Link>
-            </p>
+            </div>
           </div>
 
-          <div className="text-xs text-gray-500 text-center">
-            By creating an account, you agree to our{" "}
-            <Link href="/terms" className="text-blue-600 hover:underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" className="text-blue-600 hover:underline">
-              Privacy Policy
-            </Link>
-          </div>
+          {!isGoogleAuthEnabled && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                Google authentication is not configured. Please use email/password signup.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
     </div>
