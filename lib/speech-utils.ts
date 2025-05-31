@@ -1,9 +1,11 @@
 // Speech recognition and synthesis utilities
 export class SpeechManager {
-  private recognition: any | null = null // Declare SpeechRecognition variable
+  private recognition: any | null = null
   private synthesis: SpeechSynthesis | null = null
   private isListening = false
   private currentUtterance: SpeechSynthesisUtterance | null = null
+  private accumulatedTranscript = ""
+  private restartTimeout: NodeJS.Timeout | null = null
 
   constructor() {
     this.initializeSpeechRecognition()
@@ -45,31 +47,50 @@ export class SpeechManager {
       return false
     }
 
+    // Reset accumulated transcript when starting fresh
+    this.accumulatedTranscript = ""
+
     this.recognition.onresult = (event) => {
-      let interimTranscript = ""
-      let finalTranscript = ""
+      // Get only the latest results instead of processing all results each time
+      const latestResult = event.results[event.results.length - 1]
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript
-        } else {
-          interimTranscript += transcript
+      if (latestResult.isFinal) {
+        // For final results, add to accumulated transcript without duplication
+        const finalText = latestResult[0].transcript.trim()
+        // Only add if it's not already the last part of the accumulated transcript
+        if (!this.accumulatedTranscript.endsWith(finalText)) {
+          this.accumulatedTranscript += (this.accumulatedTranscript ? " " : "") + finalText
         }
+        // Send the accumulated transcript as final
+        onResult(this.accumulatedTranscript, true)
+      } else {
+        // For interim results, just show the latest interim + accumulated
+        const interimText = latestResult[0].transcript.trim()
+        const fullInterim = this.accumulatedTranscript + (this.accumulatedTranscript ? " " : "") + interimText
+        onResult(fullInterim, false)
       }
-
-      onResult(finalTranscript || interimTranscript, !!finalTranscript)
     }
 
     this.recognition.onerror = (event) => {
       console.error("Speech recognition error:", event.error)
-      onError(`Speech recognition error: ${event.error}`)
-      this.isListening = false
+
+      // Handle specific errors differently
+      if (event.error === "no-speech" || event.error === "audio-capture") {
+        // These are recoverable errors - try to restart
+        this.restartRecognition(onResult, onError, onEnd)
+      } else {
+        onError(`Speech recognition error: ${event.error}`)
+        this.isListening = false
+      }
     }
 
     this.recognition.onend = () => {
-      this.isListening = false
-      onEnd()
+      // If we're still supposed to be listening, restart recognition
+      if (this.isListening) {
+        this.restartRecognition(onResult, onError, onEnd)
+      } else {
+        onEnd()
+      }
     }
 
     this.recognition.onstart = () => {
@@ -85,15 +106,63 @@ export class SpeechManager {
     }
   }
 
-  stopListening() {
-    if (this.recognition && this.isListening) {
-      this.recognition.stop()
-      this.isListening = false
+  private restartRecognition(
+    onResult: (transcript: string, isFinal: boolean) => void,
+    onError: (error: string) => void,
+    onEnd: () => void,
+  ) {
+    // Clear any existing restart timeout
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout)
     }
+
+    // Restart after a short delay to avoid rapid restarts
+    this.restartTimeout = setTimeout(() => {
+      if (this.isListening && this.recognition) {
+        try {
+          this.recognition.start()
+        } catch (error) {
+          console.error("Failed to restart recognition:", error)
+          // If restart fails, try one more time after a longer delay
+          setTimeout(() => {
+            if (this.isListening && this.recognition) {
+              try {
+                this.recognition.start()
+              } catch (finalError) {
+                onError("Speech recognition failed to restart")
+                this.isListening = false
+              }
+            }
+          }, 1000)
+        }
+      }
+    }, 100)
+  }
+
+  stopListening() {
+    this.isListening = false
+
+    // Clear restart timeout
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout)
+      this.restartTimeout = null
+    }
+
+    if (this.recognition) {
+      this.recognition.stop()
+    }
+
+    // Reset accumulated transcript
+    this.accumulatedTranscript = ""
   }
 
   isCurrentlyListening(): boolean {
     return this.isListening
+  }
+
+  // Get the current accumulated transcript
+  getAccumulatedTranscript(): string {
+    return this.accumulatedTranscript
   }
 
   // Speech Synthesis Methods
@@ -149,7 +218,10 @@ export class SpeechManager {
 
     utterance.onerror = (event) => {
       console.error("Speech synthesis error:", event.error)
-      onError?.(`Speech synthesis error: ${event.error}`)
+      // Don't show error for interrupted speech - it's normal when user stops it
+      if (event.error !== "interrupted") {
+        onError?.(`Speech synthesis error: ${event.error}`)
+      }
       this.currentUtterance = null
     }
 
@@ -217,5 +289,6 @@ export function useSpeech() {
     isSpeaking: speechManager.isSpeaking.bind(speechManager),
     isSupported: speechManager.isSupported.bind(speechManager),
     getAvailableVoices: speechManager.getAvailableVoices.bind(speechManager),
+    getAccumulatedTranscript: speechManager.getAccumulatedTranscript.bind(speechManager),
   }
 }

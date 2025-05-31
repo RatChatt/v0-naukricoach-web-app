@@ -510,6 +510,9 @@ export default function InterviewSessionPage() {
               <Button variant="outline" size="sm" onClick={() => setAutoSpeak(!autoSpeak)}>
                 <Settings className="h-4 w-4" />
               </Button>
+              <Button variant="destructive" size="sm" onClick={handleEndInterview} className="ml-2">
+                End Interview
+              </Button>
             </div>
           </div>
         </div>
@@ -609,7 +612,14 @@ export default function InterviewSessionPage() {
               disabled={evaluating || isSpeaking}
             />
 
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <Button
+                variant="outline"
+                onClick={handleEndInterview}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                End Interview Early
+              </Button>
               <Button
                 onClick={handleSubmitAnswer}
                 disabled={!currentAnswer.trim() || evaluating || isRecording || isSpeaking}

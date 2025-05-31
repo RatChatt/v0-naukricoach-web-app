@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Mic, MicOff, Loader2, AlertCircle } from "lucide-react"
+import { Mic, MicOff, Loader2, AlertCircle, RotateCcw } from "lucide-react"
 import { useSpeech } from "@/lib/speech-utils"
 
 interface SpeechControlsProps {
@@ -24,6 +24,7 @@ export function SpeechControls({
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState("")
+  const [finalTranscript, setFinalTranscript] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [supported, setSupported] = useState({ recognition: false, synthesis: false })
 
@@ -37,27 +38,38 @@ export function SpeechControls({
 
     setError(null)
     setInterimTranscript("")
+    setFinalTranscript("")
+
+    // Reset the accumulated transcript in the speech manager before starting
+    speech.stopListening() // This ensures we stop any existing session
 
     const success = speech.startListening(
       (transcript, isFinal) => {
         if (isFinal) {
-          setIsTranscribing(true)
-          onTranscriptChange(transcript, true)
+          setFinalTranscript(transcript)
           setInterimTranscript("")
+          onTranscriptChange(transcript, true)
 
-          // Simulate processing delay
+          // Brief processing indication
+          setIsTranscribing(true)
           setTimeout(() => {
             setIsTranscribing(false)
-          }, 1000)
+          }, 500)
         } else {
           setInterimTranscript(transcript)
           onTranscriptChange(transcript, false)
         }
       },
       (error) => {
-        setError(error)
-        setIsRecording(false)
-        onRecordingStateChange(false)
+        // Filter out common recoverable errors
+        if (!error.includes("no-speech") && !error.includes("audio-capture")) {
+          setError(error)
+        }
+        // Don't stop recording for recoverable errors
+        if (error.includes("network") || error.includes("not-allowed")) {
+          setIsRecording(false)
+          onRecordingStateChange(false)
+        }
       },
       () => {
         setIsRecording(false)
@@ -77,6 +89,12 @@ export function SpeechControls({
     setIsRecording(false)
     onRecordingStateChange(false)
     setInterimTranscript("")
+  }
+
+  const clearTranscript = () => {
+    setFinalTranscript("")
+    setInterimTranscript("")
+    onTranscriptChange("", true)
   }
 
   const toggleRecording = () => {
@@ -132,15 +150,36 @@ export function SpeechControls({
           )}
         </Button>
 
+        {(finalTranscript || interimTranscript) && (
+          <Button variant="ghost" size="sm" onClick={clearTranscript} disabled={isRecording} title="Clear transcript">
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        )}
+
         {isRecording && (
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-            <span className="text-sm text-red-600 font-medium">Recording...</span>
+            <span className="text-sm text-red-600 font-medium">Listening...</span>
           </div>
         )}
       </div>
 
-      {interimTranscript && (
+      {/* Show final transcript */}
+      {finalTranscript && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2">
+              <Badge variant="outline" className="text-xs bg-green-100 text-green-800">
+                Captured
+              </Badge>
+              <p className="text-sm text-green-800">{finalTranscript}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Show interim transcript */}
+      {interimTranscript && isRecording && (
         <Card className="border-blue-200 bg-blue-50">
           <CardContent className="p-3">
             <div className="flex items-start gap-2">
@@ -149,6 +188,17 @@ export function SpeechControls({
               </Badge>
               <p className="text-sm text-blue-800 italic">{interimTranscript}</p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Helpful tip */}
+      {isRecording && (
+        <Card className="border-gray-200 bg-gray-50">
+          <CardContent className="p-2">
+            <p className="text-xs text-gray-600">
+              💡 Tip: You can pause while speaking. Your previous words will be preserved.
+            </p>
           </CardContent>
         </Card>
       )}
